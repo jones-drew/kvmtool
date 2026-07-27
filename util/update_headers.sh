@@ -32,7 +32,7 @@ copy_uapi_linux_header () {
 	cp -- "$LINUX_ROOT/include/uapi/linux/$1" include/linux
 }
 
-for header in kvm.h $VIRTIO_LIST
+for header in kvm.h iommufd.h vfio.h $VIRTIO_LIST
 do
 	copy_uapi_linux_header $header
 done
