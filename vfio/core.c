@@ -659,6 +659,11 @@ static int vfio__init(struct kvm *kvm)
 	if (!kvm->cfg.num_vfio_devices)
 		return 0;
 
+#ifdef CONFIG_RISCV
+	if (kvm->cfg.arch.vfio_iommufd)
+		return vfio_iommufd__init(kvm);
+#endif
+
 	vfio_devices = calloc(kvm->cfg.num_vfio_devices, sizeof(*vfio_devices));
 	if (!vfio_devices)
 		return -ENOMEM;
@@ -685,6 +690,11 @@ static int vfio__exit(struct kvm *kvm)
 
 	if (!kvm->cfg.num_vfio_devices)
 		return 0;
+
+#ifdef CONFIG_RISCV
+	if (kvm->cfg.arch.vfio_iommufd)
+		return vfio_iommufd__exit(kvm);
+#endif
 
 	for (i = 0; i < kvm->cfg.num_vfio_devices; i++)
 		vfio_device_exit(kvm, &vfio_devices[i]);

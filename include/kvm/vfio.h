@@ -92,6 +92,8 @@ struct vfio_region {
 	int				is_ioport	:1;
 };
 
+struct vfio_iommufd_group;
+
 struct vfio_device {
 	struct device_header		dev_hdr;
 	struct vfio_device_params	*params;
@@ -102,6 +104,15 @@ struct vfio_device {
 	struct vfio_region		*regions;
 
 	char				*sysfs_path;
+
+	/* iommufd backend only; set by VFIO_DEVICE_BIND_IOMMUFD. */
+	u32				iommufd_id;
+	/* iommufd backend only; device's outer IOMMU group. */
+	struct vfio_iommufd_group	*iommufd_group;
+	/* iommufd backend only; the HWPT this device is attached to. */
+	u32				hwpt_id;
+	/* iommufd backend only; bus-specific setup completed. */
+	int				iommufd_configured :1;
 
 	struct vfio_pci_device		pci;
 };
@@ -120,6 +131,8 @@ struct vfio_group {
 };
 
 int vfio_device_parser(const struct option *opt, const char *arg, int unset);
+int vfio_iommufd__init(struct kvm *kvm);
+int vfio_iommufd__exit(struct kvm *kvm);
 bool vfio_region_access(struct vfio_region *region, u64 offset, u8 *data,
 			unsigned int len, bool is_write);
 int vfio_map_region(struct kvm *kvm, struct vfio_device *vdev,

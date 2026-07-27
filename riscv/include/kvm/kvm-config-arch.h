@@ -17,6 +17,7 @@ struct kvm_config_arch {
 	u64		custom_mimpid;
 	bool		ext_disabled[KVM_RISCV_ISA_EXT_MAX];
 	bool		sbi_ext_disabled[KVM_RISCV_SBI_EXT_MAX];
+	bool		vfio_iommufd;
 };
 
 int riscv__cpu_type_parser(const struct option *opt, const char *arg, int unset);
@@ -27,6 +28,8 @@ int riscv__cpu_type_parser(const struct option *opt, const char *arg, int unset)
 		     "Choose the cpu type (default is max).", riscv__cpu_type_parser, kvm),\
 	OPT_STRING('\0', "dump-dtb", &(cfg)->dump_dtb_filename,		\
 		   ".dtb file", "Dump generated .dtb to specified file"),\
+	OPT_BOOLEAN('\0', "vfio-iommufd", &(cfg)->vfio_iommufd,		\
+		    "Use iommufd for second-stage VFIO DMA translation"),	\
 	OPT_U64('\0', "suspend-seconds",				\
 		&(cfg)->suspend_seconds,				\
 		"Number of seconds to suspend for system suspend (default is 5)"), \

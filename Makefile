@@ -200,6 +200,7 @@ endif
 ifeq ($(ARCH),riscv)
 	DEFINES		+= -DCONFIG_RISCV
 	ARCH_INCLUDE	:= riscv/include
+	OBJS		+= vfio/iommufd.o
 	OBJS		+= hw/serial.o
 	OBJS		+= riscv/fdt.o
 	OBJS		+= riscv/ioport.o
