@@ -23,4 +23,8 @@
 		TYPE NAME[]; \
 	}
 
+#ifndef __counted_by
+#define __counted_by(m)
+#endif
+
 #endif
