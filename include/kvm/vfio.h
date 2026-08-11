@@ -43,12 +43,12 @@ struct vfio_pci_msi_entry {
 struct vfio_pci_msix_table {
 	size_t				size;
 	unsigned int			bar;
+	u32				bar_offset;
 	u32				guest_phys_addr;
 };
 
 struct vfio_pci_msix_pba {
 	size_t				size;
-	off_t				fd_offset; /* in VFIO device fd */
 	unsigned int			bar;
 	u32				bar_offset; /* in the shared BAR */
 	u32				guest_phys_addr;
@@ -120,6 +120,8 @@ struct vfio_group {
 };
 
 int vfio_device_parser(const struct option *opt, const char *arg, int unset);
+bool vfio_region_access(struct vfio_region *region, u64 offset, u8 *data,
+			unsigned int len, bool is_write);
 int vfio_map_region(struct kvm *kvm, struct vfio_device *vdev,
 		    struct vfio_region *region);
 void vfio_unmap_region(struct kvm *kvm, struct vfio_region *region);

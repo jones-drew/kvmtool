@@ -161,44 +161,50 @@ static void vfio_ioport_mmio(struct kvm_cpu *vcpu, u64 addr, u8 *data, u32 len,
 		vfio_ioport_in(region, offset, data, len);
 }
 
-static void vfio_mmio_access(struct kvm_cpu *vcpu, u64 addr, u8 *data, u32 len,
-			     u8 is_write, void *ptr)
+bool vfio_region_access(struct vfio_region *region, u64 offset, u8 *data,
+			unsigned int len, bool is_write)
 {
 	u64 val;
 	ssize_t nr;
-	struct vfio_region *region = ptr;
 	struct vfio_device *vdev = region->vdev;
 
-	u32 offset = addr - region->guest_phys_addr;
-
-	if (len < 1 || len > 8)
-		goto err_report;
+	if (len < 1 || len > 8 || offset > region->info.size ||
+	    len > region->info.size - offset)
+		return false;
 
 	if (is_write) {
 		if (!(region->info.flags & VFIO_REGION_INFO_FLAG_WRITE))
-			goto err_report;
+			return false;
 
 		memcpy(&val, data, len);
 
 		nr = pwrite(vdev->fd, &val, len, region->info.offset + offset);
 		if ((u32)nr != len)
-			goto err_report;
+			return false;
 	} else {
 		if (!(region->info.flags & VFIO_REGION_INFO_FLAG_READ))
-			goto err_report;
+			return false;
 
 		nr = pread(vdev->fd, &val, len, region->info.offset + offset);
 		if ((u32)nr != len)
-			goto err_report;
+			return false;
 
 		memcpy(data, &val, len);
 	}
 
-	return;
+	return true;
+}
 
-err_report:
-	vfio_dev_err(vdev, "could not %s %u bytes at 0x%x (0x%llx)", is_write ?
-		     "write" : "read", len, offset, addr);
+static void vfio_mmio_access(struct kvm_cpu *vcpu, u64 addr, u8 *data, u32 len,
+			     u8 is_write, void *ptr)
+{
+	struct vfio_region *region = ptr;
+	u64 offset = addr - region->guest_phys_addr;
+
+	if (!vfio_region_access(region, offset, data, len, is_write))
+		vfio_dev_err(region->vdev, "could not %s %u bytes at 0x%llx (0x%llx)",
+			     is_write ? "write" : "read", len,
+			     (unsigned long long)offset, (unsigned long long)addr);
 }
 
 static int vfio_setup_trap_region(struct kvm *kvm, struct vfio_device *vdev,
