@@ -3,6 +3,7 @@
 #include <linux/types.h>
 #include <linux/kvm.h>
 #include <errno.h>
+#include <string.h>
 
 #include "kvm/kvm.h"
 #include "kvm/irq.h"
@@ -72,7 +73,10 @@ static bool check_for_irq_routing(struct kvm *kvm)
 static int irq__update_msix_routes(struct kvm *kvm,
 				   struct kvm_irq_routing_entry *entry)
 {
-	return ioctl(kvm->vm_fd, KVM_SET_GSI_ROUTING, irq_routing);
+	if (ioctl(kvm->vm_fd, KVM_SET_GSI_ROUTING, irq_routing) < 0)
+		return -errno;
+
+	return 0;
 }
 
 static bool irq__default_can_signal_msi(struct kvm *kvm)
@@ -130,8 +134,13 @@ int irq__add_msix_route(struct kvm *kvm, struct msi_msg *msg, u32 device_id)
 	irq_routing->nr++;
 
 	r = msi_routing_ops->update_route(kvm, entry);
-	if (r)
+	if (r) {
+		pr_err("Failed to add MSI route for GSI %u: %s",
+		       entry->gsi, strerror(-r));
+		irq_routing->nr--;
+		memset(entry, 0, sizeof(*entry));
 		return r;
+	}
 
 	return next_gsi++;
 }
