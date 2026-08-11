@@ -8,9 +8,11 @@
 #include "kvm/kvm.h"
 #include "kvm/irq.h"
 #include "kvm/kvm-arch.h"
+#include "kvm/mutex.h"
 
 static u8 next_line = KVM_IRQ_OFFSET;
 static int allocated_gsis = 0;
+static DEFINE_MUTEX(irq_routing_lock);
 
 int next_gsi;
 
@@ -110,12 +112,16 @@ int irq__add_msix_route(struct kvm *kvm, struct msi_msg *msg, u32 device_id)
 	int r;
 	struct kvm_irq_routing_entry *entry;
 
-	if (!check_for_irq_routing(kvm))
-		return -ENXIO;
+	mutex_lock(&irq_routing_lock);
+
+	if (!check_for_irq_routing(kvm)) {
+		r = -ENXIO;
+		goto out_unlock;
+	}
 
 	r = irq__allocate_routing_entry();
 	if (r)
-		return r;
+		goto out_unlock;
 
 	entry = &irq_routing->entries[irq_routing->nr];
 	*entry = (struct kvm_irq_routing_entry) {
@@ -139,10 +145,14 @@ int irq__add_msix_route(struct kvm *kvm, struct msi_msg *msg, u32 device_id)
 		       entry->gsi, strerror(-r));
 		irq_routing->nr--;
 		memset(entry, 0, sizeof(*entry));
-		return r;
+		goto out_unlock;
 	}
 
-	return next_gsi++;
+	r = next_gsi++;
+
+out_unlock:
+	mutex_unlock(&irq_routing_lock);
+	return r;
 }
 
 static bool update_data(u32 *ptr, u32 newdata)
@@ -159,12 +169,15 @@ void irq__update_msix_route(struct kvm *kvm, u32 gsi, struct msi_msg *msg)
 	struct kvm_irq_routing_msi *entry;
 	unsigned int i;
 	bool changed;
+	int r = 0;
+
+	mutex_lock(&irq_routing_lock);
 
 	for (i = 0; i < irq_routing->nr; i++)
 		if (gsi == irq_routing->entries[i].gsi)
 			break;
 	if (i == irq_routing->nr)
-		return;
+		goto out_unlock;
 
 	entry = &irq_routing->entries[i].u.msi;
 
@@ -173,9 +186,14 @@ void irq__update_msix_route(struct kvm *kvm, u32 gsi, struct msi_msg *msg)
 	changed |= update_data(&entry->data, msg->data);
 
 	if (!changed)
-		return;
+		goto out_unlock;
 
-	if (msi_routing_ops->update_route(kvm, &irq_routing->entries[i]))
+	r = msi_routing_ops->update_route(kvm, &irq_routing->entries[i]);
+
+out_unlock:
+	mutex_unlock(&irq_routing_lock);
+
+	if (r)
 		die_perror("KVM_SET_GSI_ROUTING");
 }
 
