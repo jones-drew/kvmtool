@@ -1,0 +1,63 @@
+RISC-V device assignment with iommufd
+===================================
+
+On RISC-V, --vfio-iommufd selects a backend using /dev/iommu and VFIO device
+cdevs. It allocates an explicit IOMMU_HWPT_ALLOC_NEST_PARENT hardware page
+table (HWPT) for second-stage DMA translation. The guest sees a PCI device
+without a virtual IOMMU. Devices in the same host IOMMU group share one
+HWPT; different groups use separate HWPTs in the same IOAS.
+
+Without --vfio-iommufd, kvmtool uses the legacy VFIO type1 backend. Ordinary
+device assignment can use first-stage IOMMU mappings; second-stage
+translation is needed for the RISC-V IOMMU IRQ-bypass implementation.
+The option applies to all assigned devices in the VM. --no-vfio-iommufd
+restores the default backend.
+
+Host requirements
+-----------------
+
+For --vfio-iommufd, the host kernel needs CONFIG_IOMMUFD,
+CONFIG_VFIO_DEVICE_CDEV, CONFIG_VFIO_PCI, and a RISC-V IOMMU driver with
+NEST_PARENT support.
+
+Bind the selected device to vfio-pci before starting kvmtool. All devices
+in its IOMMU group must be available for VFIO ownership. A bound device
+should expose /sys/bus/pci/devices/<BDF>/vfio-dev/vfioN and
+/dev/vfio/devices/vfioN. The process needs access to that cdev, /dev/iommu,
+and /dev/kvm, and sufficient locked-memory allowance for guest RAM.
+
+For example, after binding host device 0000:00:01.0:
+
+  lkvm run -k Image -d rootfs.ext2 -m 512 -c 2 \
+      --vfio-iommufd --vfio-pci=0000:00:01.0 \
+      -p 'console=ttyS0 root=/dev/vda'
+
+Repeat --vfio-pci for additional devices, including devices in the same
+IOMMU group. kvmtool attaches every device before checking the allowed IOVA
+ranges and mapping guest RAM, so device reservations such as the SW-MSI
+window are accounted for.
+
+AIA mode
+--------
+
+--aia-mode selects how KVM implements the guest IMSIC interrupt files:
+
+  emul     Emulate the interrupt files in software.
+  hwaccel  Require hardware interrupt files for the guest vCPUs.
+  auto     Use hardware interrupt files when available, with software
+           emulation as a fallback.
+
+Without --aia-mode, kvmtool preserves the kernel default. --no-aia-mode
+restores that default after a mode option. An explicit mode requires Ssaia
+and a working KVM AIA device.
+
+In hwaccel mode, guest entry fails if KVM cannot allocate a hardware
+interrupt file. The host must have enough available IMSIC guest interrupt
+files on the physical CPUs where the vCPUs run.
+
+IRQ bypass allows an assigned device's interrupts to reach a hardware guest
+interrupt file directly. Request --aia-mode=hwaccel along with
+--vfio-iommufd for a host implementing RISC-V IRQ bypass. Basic assignment
+does not require HWACCEL mode or bypass. Bypass also requires support from
+the host kernel and IOMMU; selecting hwaccel alone does not establish that
+bypass is active.
