@@ -11,6 +11,8 @@ enum riscv__cpu_type {
 struct kvm_config_arch {
 	enum riscv__cpu_type cpu_type;
 	const char	*dump_dtb_filename;
+	u32		aia_mode;
+	bool		aia_mode_set;
 	u64		suspend_seconds;
 	u64		custom_mvendorid;
 	u64		custom_marchid;
@@ -21,9 +23,13 @@ struct kvm_config_arch {
 };
 
 int riscv__cpu_type_parser(const struct option *opt, const char *arg, int unset);
+int aia__mode_parser(const struct option *opt, const char *arg, int unset);
 
 #define OPT_ARCH_RUN(pfx, cfg)						\
 	pfx,								\
+	OPT_CALLBACK('\0', "aia-mode", cfg, "emul|hwaccel|auto",		\
+		     "Set AIA mode (default is chosen by the kernel)",	\
+		     aia__mode_parser, NULL),				\
 	OPT_CALLBACK('\0', "cpu-type", NULL, "min or max",		\
 		     "Choose the cpu type (default is max).", riscv__cpu_type_parser, kvm),\
 	OPT_STRING('\0', "dump-dtb", &(cfg)->dump_dtb_filename,		\

@@ -15,6 +15,30 @@ static struct kvm_device_attr aia_mode_attr = {
 	.attr	= KVM_DEV_RISCV_AIA_CONFIG_MODE,
 };
 
+int aia__mode_parser(const struct option *opt, const char *arg, int unset)
+{
+	struct kvm_config_arch *cfg = opt->value;
+
+	if (unset) {
+		cfg->aia_mode_set = false;
+		return 0;
+	}
+
+	if (!strcmp(arg, "emul"))
+		cfg->aia_mode = KVM_DEV_RISCV_AIA_MODE_EMUL;
+	else if (!strcmp(arg, "hwaccel"))
+		cfg->aia_mode = KVM_DEV_RISCV_AIA_MODE_HWACCEL;
+	else if (!strcmp(arg, "auto"))
+		cfg->aia_mode = KVM_DEV_RISCV_AIA_MODE_AUTO;
+	else {
+		pr_err("Unknown AIA mode '%s'", arg);
+		return -EINVAL;
+	}
+
+	cfg->aia_mode_set = true;
+	return 0;
+}
+
 static u32 aia_nr_ids = 0;
 static struct kvm_device_attr aia_nr_ids_attr = {
 	.group	= KVM_DEV_RISCV_AIA_GRP_CONFIG,
@@ -154,6 +178,15 @@ static int aia__init(struct kvm *kvm)
 		return 0;
 
 	/* Set/Get AIA device config parameters */
+	if (kvm->cfg.arch.aia_mode_set) {
+		aia_mode = kvm->cfg.arch.aia_mode;
+		ret = ioctl(aia_fd, KVM_SET_DEVICE_ATTR, &aia_mode_attr);
+		if (ret) {
+			ret = -errno;
+			pr_err("Failed to set AIA mode: %s", strerror(-ret));
+			return ret;
+		}
+	}
 	ret = ioctl(aia_fd, KVM_GET_DEVICE_ATTR, &aia_mode_attr);
 	if (ret)
 		return ret;
@@ -209,12 +242,18 @@ void aia__create(struct kvm *kvm)
 		.flags = 0,
 	};
 
-	if (riscv__isa_extension_disabled(kvm, KVM_RISCV_ISA_EXT_SSAIA))
+	if (riscv__isa_extension_disabled(kvm, KVM_RISCV_ISA_EXT_SSAIA)) {
+		if (kvm->cfg.arch.aia_mode_set)
+			die("--aia-mode requires Ssaia");
 		return;
+	}
 
 	err = ioctl(kvm->vm_fd, KVM_CREATE_DEVICE, &aia_device);
-	if (err)
+	if (err) {
+		if (kvm->cfg.arch.aia_mode_set)
+			die_perror("Failed to create AIA device");
 		return;
+	}
 	aia_fd = aia_device.fd;
 
 	riscv_irqchip = IRQCHIP_AIA;
