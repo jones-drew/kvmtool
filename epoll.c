@@ -6,7 +6,6 @@
 
 static void *epoll__thread(void *param)
 {
-	u64 stop;
 	int nfds, i;
 	struct kvm__epoll *epoll = param;
 	struct kvm *kvm = epoll->kvm;
@@ -24,10 +23,6 @@ static void *epoll__thread(void *param)
 		}
 	}
 done:
-	if (read(epoll->stop_fd, &stop, sizeof(stop)) < 0)
-		pr_warning("%s: read(stop) failed with %d", __func__, errno);
-	if (write(epoll->stop_fd, &stop, sizeof(stop)) < 0)
-		pr_warning("%s: write(stop) failed with %d", __func__, errno);
 	return NULL;
 }
 
@@ -81,9 +76,9 @@ int epoll__exit(struct kvm__epoll *epoll)
 	if (r < 0)
 		return r;
 
-	r = read(epoll->stop_fd, &stop, sizeof(stop));
-	if (r < 0)
-		return r;
+	r = pthread_join(epoll->thread, NULL);
+	if (r)
+		return -r;
 
 	close(epoll->stop_fd);
 	close(epoll->fd);
